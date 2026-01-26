@@ -124,9 +124,8 @@ const authMiddleware = async (req, res, next) => {
 
 // CORS - explicit origins
 const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173'
+  'https://tv.pokhrelmilan.com.np',
+  'https://tvapi.pokhrelmilan.com.np'
 ]
 
 app.use(cors({
