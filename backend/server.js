@@ -1,0 +1,521 @@
+import express from 'express'
+import cors from 'cors'
+import jwt from 'jsonwebtoken'
+import jwksClient from 'jwks-rsa'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import { 
+  CognitoIdentityProviderClient, 
+  SignUpCommand,
+  ConfirmSignUpCommand,
+  InitiateAuthCommand,
+  ForgotPasswordCommand,
+  ConfirmForgotPasswordCommand,
+  ResendConfirmationCodeCommand
+} from '@aws-sdk/client-cognito-identity-provider'
+import crypto from 'crypto'
+import dotenv from 'dotenv'
+
+dotenv.config()
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const USERS_FILE = join(__dirname, 'users.json')
+
+const app = express()
+const PORT = process.env.PORT || 3001
+
+// Configuration
+const COGNITO_REGION = process.env.COGNITO_REGION || 'us-east-1'
+const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID
+const COGNITO_CLIENT_ID = process.env.COGNITO_CLIENT_ID
+const COGNITO_CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET
+const COGNITO_DOMAIN = process.env.COGNITO_DOMAIN
+const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5173/callback'
+const STREAM_BASE_URL = process.env.STREAM_BASE_URL || 'http://103.10.30.130:8081/viatv'
+
+// Cognito client
+const cognitoClient = new CognitoIdentityProviderClient({ region: COGNITO_REGION })
+
+// Generate secret hash for Cognito (required when client has a secret)
+const getSecretHash = (username) => {
+  if (!COGNITO_CLIENT_SECRET) return undefined
+  return crypto
+    .createHmac('sha256', COGNITO_CLIENT_SECRET)
+    .update(username + COGNITO_CLIENT_ID)
+    .digest('base64')
+}
+
+// ============ USER MANAGEMENT ============
+
+const loadUsers = () => {
+  try {
+    if (existsSync(USERS_FILE)) {
+      return JSON.parse(readFileSync(USERS_FILE, 'utf-8'))
+    }
+  } catch {}
+  return { whitelist: { enabled: true, users: [] }, admins: [] }
+}
+
+const saveUsers = (data) => {
+  writeFileSync(USERS_FILE, JSON.stringify(data, null, 2))
+}
+
+const isWhitelisted = (email) => {
+  const users = loadUsers()
+  if (!users.whitelist.enabled) return true
+  return users.whitelist.users.includes(email?.toLowerCase())
+}
+
+// JWKS client for token verification
+const client = COGNITO_USER_POOL_ID ? jwksClient({
+  jwksUri: `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
+  cache: true,
+  cacheMaxAge: 86400000
+}) : null
+
+const getKey = (header, callback) => {
+  if (!client) return callback(new Error('Cognito not configured'))
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) return callback(err)
+    callback(null, key.getPublicKey())
+  })
+}
+
+// Verify Cognito JWT
+const verifyToken = (token) => {
+  return new Promise((resolve, reject) => {
+    if (!COGNITO_USER_POOL_ID) {
+      // Dev mode - accept any token or create dev user
+      return resolve({ sub: 'dev-user', email: 'dev@local' })
+    }
+    
+    jwt.verify(token, getKey, {
+      issuer: `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}`,
+      algorithms: ['RS256']
+    }, (err, decoded) => {
+      if (err) reject(err)
+      else resolve(decoded)
+    })
+  })
+}
+
+// Auth middleware - verifies token + checks whitelist
+const authMiddleware = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' })
+    }
+    const token = authHeader.split(' ')[1]
+    const user = await verifyToken(token)
+    
+    // Check whitelist
+    if (!isWhitelisted(user.email)) {
+      return res.status(403).json({ error: 'Access denied. Contact admin for access.' })
+    }
+    
+    req.user = user
+    next()
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
+// CORS - explicit origins
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173'
+]
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true)
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true)
+    }
+    return callback(null, true)
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
+app.use(express.json())
+
+// Channel data
+const channels = {
+  Sports: [
+    { id: 'viastarsports1hd', name: 'Star Sports 1 HD' },
+    { id: 'viastarsports2hd', name: 'Star Sports 2 HD' }
+  ],
+  Entertainment: [
+    { id: 'viastargoldhd', name: 'Star Gold HD' },
+    { id: 'viacolors', name: 'Colors' },
+    { id: 'viasonyhd', name: 'Sony HD' },
+    { id: 'viasonysabhd', name: 'Sony SAB HD' },
+    { id: 'viasonypix', name: 'Sony PIX' },
+    { id: 'viazeecinema', name: 'Zee Cinema' },
+    { id: 'viazeeanmol', name: 'Zee Anmol' },
+    { id: 'viazeecafehd', name: 'Zee Cafe HD' },
+    { id: 'viastarmovies', name: 'Star Movies' }
+  ],
+  News: [
+    { id: 'viaaajtak', name: 'Aaj Tak' },
+    { id: 'viazeenews', name: 'Zee News' }
+  ],
+  Kids: [
+    { id: 'viadiscoverykids', name: 'Discovery Kids' },
+    { id: 'vianickjr', name: 'Nick Jr' },
+    { id: 'viapogo', name: 'Pogo' },
+    { id: 'vianick', name: 'Nick' }
+  ],
+  Infotainment: [
+    { id: 'viadiscoveryhd', name: 'Discovery HD' },
+    { id: 'vianatgeowildhd', name: 'Nat Geo Wild HD' },
+    { id: 'viaanimalplanet', name: 'Animal Planet' },
+    { id: 'viatlc', name: 'TLC' }
+  ],
+  Music: [
+    { id: 'viamtv', name: 'MTV' },
+    { id: 'viazing', name: 'Zing' },
+    { id: 'via9xm', name: '9XM' },
+    { id: 'via9xjalwa', name: '9X Jalwa' }
+  ]
+}
+
+// ============ AUTH ENDPOINTS ============
+
+// Get auth config (login URL, etc) - no secrets exposed
+app.get('/api/auth/config', (req, res) => {
+  if (!COGNITO_DOMAIN || !COGNITO_CLIENT_ID) {
+    return res.json({ configured: false })
+  }
+  
+  const loginUrl = `https://${COGNITO_DOMAIN}/login?` + new URLSearchParams({
+    client_id: COGNITO_CLIENT_ID,
+    response_type: 'code',
+    scope: 'email openid profile',
+    redirect_uri: REDIRECT_URI
+  })
+  
+  const googleUrl = `https://${COGNITO_DOMAIN}/oauth2/authorize?` + new URLSearchParams({
+    client_id: COGNITO_CLIENT_ID,
+    response_type: 'code',
+    scope: 'email openid profile',
+    redirect_uri: REDIRECT_URI,
+    identity_provider: 'Google',
+    prompt: 'select_account'
+  })
+
+  res.json({
+    configured: true,
+    loginUrl,
+    googleUrl,
+    signupUrl: loginUrl.replace('/login?', '/signup?')
+  })
+})
+
+// ============ EMAIL AUTH (NO REDIRECT TO COGNITO UI) ============
+
+// Sign up with email
+app.post('/api/auth/signup', async (req, res) => {
+  const { username, email, password } = req.body
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: 'Username, email and password required' })
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format' })
+  }
+
+  try {
+    await cognitoClient.send(new SignUpCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      SecretHash: getSecretHash(username),
+      Username: username,
+      Password: password,
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'preferred_username', Value: username }
+      ]
+    }))
+    res.json({ success: true, message: 'Check your email for verification code' })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// Verify email with code
+app.post('/api/auth/verify', async (req, res) => {
+  const { username, code } = req.body
+  if (!username || !code) {
+    return res.status(400).json({ error: 'Username and code required' })
+  }
+
+  try {
+    await cognitoClient.send(new ConfirmSignUpCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      SecretHash: getSecretHash(username),
+      Username: username,
+      ConfirmationCode: code
+    }))
+    res.json({ success: true, message: 'Email verified! You can now login.' })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// Resend verification code
+app.post('/api/auth/resend-code', async (req, res) => {
+  const { username } = req.body
+  if (!username) return res.status(400).json({ error: 'Username required' })
+
+  try {
+    await cognitoClient.send(new ResendConfirmationCodeCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      SecretHash: getSecretHash(username),
+      Username: username
+    }))
+    res.json({ success: true, message: 'Verification code sent' })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// Login with username/email and password
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username/email and password required' })
+  }
+
+  try {
+    const result = await cognitoClient.send(new InitiateAuthCommand({
+      AuthFlow: 'USER_PASSWORD_AUTH',
+      ClientId: COGNITO_CLIENT_ID,
+      AuthParameters: {
+        USERNAME: username,
+        PASSWORD: password,
+        SECRET_HASH: getSecretHash(username)
+      }
+    }))
+
+    const tokens = result.AuthenticationResult
+    const decoded = jwt.decode(tokens.IdToken)
+
+    res.json({
+      access_token: tokens.AccessToken,
+      id_token: tokens.IdToken,
+      refresh_token: tokens.RefreshToken,
+      user: {
+        email: decoded.email,
+        sub: decoded.sub,
+        name: decoded.preferred_username || decoded.name || decoded.email
+      }
+    })
+  } catch (err) {
+    if (err.name === 'UserNotConfirmedException') {
+      return res.status(400).json({ error: 'Please verify your email first', needsVerification: true })
+    }
+    res.status(401).json({ error: err.message })
+  }
+})
+
+// Forgot password
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email required' })
+
+  try {
+    await cognitoClient.send(new ForgotPasswordCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      SecretHash: getSecretHash(email),
+      Username: email
+    }))
+    res.json({ success: true, message: 'Password reset code sent to your email' })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// Reset password with code
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ error: 'Email, code, and new password required' })
+  }
+
+  try {
+    await cognitoClient.send(new ConfirmForgotPasswordCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      SecretHash: getSecretHash(email),
+      Username: email,
+      ConfirmationCode: code,
+      Password: newPassword
+    }))
+    res.json({ success: true, message: 'Password reset successful! You can now login.' })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// Exchange auth code for tokens (Google OAuth callback)
+app.post('/api/auth/token', async (req, res) => {
+  const { code } = req.body
+  
+  if (!COGNITO_DOMAIN || !COGNITO_CLIENT_ID) {
+    return res.json({
+      access_token: 'dev-token',
+      id_token: 'dev-token',
+      user: { email: 'dev@local', sub: 'dev-user' }
+    })
+  }
+
+  try {
+    const tokenUrl = `https://${COGNITO_DOMAIN}/oauth2/token`
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: COGNITO_CLIENT_ID,
+      code,
+      redirect_uri: REDIRECT_URI
+    })
+    
+    // Add client secret if configured
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' }
+    if (COGNITO_CLIENT_SECRET) {
+      const auth = Buffer.from(`${COGNITO_CLIENT_ID}:${COGNITO_CLIENT_SECRET}`).toString('base64')
+      headers['Authorization'] = `Basic ${auth}`
+    }
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers,
+      body: params
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('Token exchange failed:', error)
+      return res.status(400).json({ error: 'Token exchange failed' })
+    }
+
+    const tokens = await response.json()
+    
+    // Decode ID token to get user info
+    const decoded = jwt.decode(tokens.id_token)
+    
+    res.json({
+      access_token: tokens.access_token,
+      id_token: tokens.id_token,
+      refresh_token: tokens.refresh_token,
+      user: {
+        email: decoded.email,
+        sub: decoded.sub,
+        name: decoded.name || decoded.email
+      }
+    })
+  } catch (err) {
+    console.error('Token error:', err)
+    res.status(500).json({ error: 'Authentication failed' })
+  }
+})
+
+// Refresh token
+app.post('/api/auth/refresh', async (req, res) => {
+  const { refresh_token } = req.body
+  
+  if (!COGNITO_DOMAIN || !COGNITO_CLIENT_ID || !refresh_token) {
+    return res.status(400).json({ error: 'Invalid request' })
+  }
+
+  try {
+    const tokenUrl = `https://${COGNITO_DOMAIN}/oauth2/token`
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: COGNITO_CLIENT_ID,
+      refresh_token
+    })
+
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' }
+    if (COGNITO_CLIENT_SECRET) {
+      const auth = Buffer.from(`${COGNITO_CLIENT_ID}:${COGNITO_CLIENT_SECRET}`).toString('base64')
+      headers['Authorization'] = `Basic ${auth}`
+    }
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers,
+      body: params
+    })
+
+    if (!response.ok) {
+      return res.status(401).json({ error: 'Refresh failed' })
+    }
+
+    const tokens = await response.json()
+    const decoded = jwt.decode(tokens.id_token)
+
+    res.json({
+      access_token: tokens.access_token,
+      id_token: tokens.id_token,
+      user: {
+        email: decoded.email,
+        sub: decoded.sub,
+        name: decoded.name || decoded.email
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ error: 'Refresh failed' })
+  }
+})
+
+// Verify current token
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  res.json({ user: req.user })
+})
+
+// Logout URL
+app.get('/api/auth/logout-url', (req, res) => {
+  if (!COGNITO_DOMAIN || !COGNITO_CLIENT_ID) {
+    return res.json({ url: null })
+  }
+  
+  const logoutUrl = `https://${COGNITO_DOMAIN}/logout?` + new URLSearchParams({
+    client_id: COGNITO_CLIENT_ID,
+    logout_uri: REDIRECT_URI.replace('/callback', '')
+  })
+  
+  res.json({ url: logoutUrl })
+})
+
+// Get channels - all whitelisted users get direct stream URL
+app.get('/api/channels', authMiddleware, (req, res) => {
+  res.json({
+    channels,
+    user: { email: req.user.email },
+    streamConfig: {
+      baseUrl: STREAM_BASE_URL
+    }
+  })
+})
+
+// Health check
+app.get('/health', (req, res) => {
+  const users = loadUsers()
+  res.json({ 
+    status: 'ok', 
+    cognito: !!COGNITO_USER_POOL_ID,
+    whitelistEnabled: users.whitelist.enabled,
+    userCount: users.whitelist.users.length
+  })
+})
+
+app.listen(PORT, () => {
+  const users = loadUsers()
+  console.log(`Server running on port ${PORT}`)
+  console.log(`Cognito: ${COGNITO_USER_POOL_ID ? 'CONFIGURED' : 'DEV MODE'}`)
+  console.log(`Whitelist: ${users.whitelist.enabled ? 'ENABLED' : 'DISABLED'} (${users.whitelist.users.length} users)`)
+})
