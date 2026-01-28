@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import jwt from 'jsonwebtoken'
 import jwksClient from 'jwks-rsa'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
@@ -24,6 +25,8 @@ const USERS_FILE = join(__dirname, 'users.json')
 
 const app = express()
 const PORT = process.env.PORT || 3001
+const IS_PROD = process.env.NODE_ENV === 'production'
+const SERVE_FRONTEND = process.env.SERVE_FRONTEND === 'true'
 
 // Configuration
 const COGNITO_REGION = process.env.COGNITO_REGION || 'us-east-1'
@@ -122,6 +125,26 @@ const authMiddleware = async (req, res, next) => {
   }
 }
 
+// Stream auth middleware - checks cookie
+const streamAuthMiddleware = async (req, res, next) => {
+  try {
+    const token = req.cookies?.stream_token
+    if (!token) {
+      return res.status(401).json({ error: 'No token' })
+    }
+    const user = await verifyToken(token)
+    
+    if (!isWhitelisted(user.email)) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+    
+    req.user = user
+    next()
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
 // CORS - explicit origins
 const ALLOWED_ORIGINS = [
   'https://tv.pokhrelmilan.com.np',
@@ -140,6 +163,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
+app.use(cookieParser())
 app.use(express.json())
 
 // Channel data
@@ -490,15 +514,83 @@ app.get('/api/auth/logout-url', (req, res) => {
   res.json({ url: logoutUrl })
 })
 
-// Get channels - all whitelisted users get direct stream URL
+// Get channels - all users use proxy
 app.get('/api/channels', authMiddleware, (req, res) => {
   res.json({
     channels,
-    user: { email: req.user.email },
-    streamConfig: {
-      baseUrl: STREAM_BASE_URL
-    }
+    user: { email: req.user.email }
   })
+})
+
+// Set stream cookie (called before streaming)
+app.post('/api/stream/auth', authMiddleware, (req, res) => {
+  const token = req.headers.authorization.split(' ')[1]
+  
+  res.cookie('stream_token', token, {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: IS_PROD ? 'none' : 'lax',
+    maxAge: 60 * 60 * 1000 // 1 hour
+  })
+  
+  res.json({ success: true })
+})
+
+// ============ STREAM PROXY ============
+
+// Proxy stream manifest
+app.get('/api/stream/:channelId/chunks.m3u8', streamAuthMiddleware, async (req, res) => {
+  const { channelId } = req.params
+  const streamUrl = `${STREAM_BASE_URL}/${channelId}/chunks.m3u8`
+
+  try {
+    const response = await fetch(streamUrl)
+    if (!response.ok) return res.status(response.status).send('Stream unavailable')
+
+    const manifest = await response.text()
+    
+    // Rewrite manifest URLs to go through proxy
+    const rewritten = manifest
+      .replace(/URI="([^"]+)"/g, (_, uri) => `URI="/api/stream/${channelId}/${uri}"`)
+      .split('\n')
+      .map(line => {
+        if (line.startsWith('#') || line.trim() === '') return line
+        return `/api/stream/${channelId}/${line.trim()}`
+      })
+      .join('\n')
+
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.send(rewritten)
+  } catch (err) {
+    res.status(500).json({ error: 'Stream error' })
+  }
+})
+
+// Proxy segments
+app.get('/api/stream/:channelId/*', streamAuthMiddleware, async (req, res) => {
+  const { channelId } = req.params
+  const segment = req.params[0]
+  const queryString = new URLSearchParams(req.query).toString()
+  const segmentUrl = `${STREAM_BASE_URL}/${channelId}/${segment}${queryString ? '?' + queryString : ''}`
+
+  try {
+    const response = await fetch(segmentUrl)
+    if (!response.ok) return res.status(response.status).send('Segment unavailable')
+
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'video/mp2t')
+    res.setHeader('Cache-Control', 'no-cache')
+
+    const reader = response.body.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      res.write(value)
+    }
+    res.end()
+  } catch (err) {
+    res.status(500).json({ error: 'Segment error' })
+  }
 })
 
 // Health check
@@ -512,9 +604,19 @@ app.get('/health', (req, res) => {
   })
 })
 
+// Serve frontend static files (for container deployment)
+if (SERVE_FRONTEND) {
+  const frontendPath = join(__dirname, 'public')
+  app.use(express.static(frontendPath))
+  app.get('*', (req, res) => {
+    res.sendFile(join(frontendPath, 'index.html'))
+  })
+}
+
 app.listen(PORT, () => {
   const users = loadUsers()
   console.log(`Server running on port ${PORT}`)
   console.log(`Cognito: ${COGNITO_USER_POOL_ID ? 'CONFIGURED' : 'DEV MODE'}`)
   console.log(`Whitelist: ${users.whitelist.enabled ? 'ENABLED' : 'DISABLED'} (${users.whitelist.users.length} users)`)
+  if (SERVE_FRONTEND) console.log(`Serving frontend from /public`)
 })

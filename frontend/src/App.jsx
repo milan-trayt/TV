@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import Hls from 'hls.js'
 import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 // Auth context
 const useAuth = () => {
@@ -455,7 +455,6 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
   const [error, setError] = useState(null)
   const [showSidebar, setShowSidebar] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
-  const [streamConfig, setStreamConfig] = useState(null)
   const [userInfo, setUserInfo] = useState(null)
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
@@ -477,9 +476,15 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         
         if (res.ok) {
           const data = await res.json()
-          setStreamConfig(data.streamConfig)
           setChannels(data.channels)
           setUserInfo(data.user)
+          
+          // Set stream auth cookie
+          await fetch(`${API_URL}/api/stream/auth`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            credentials: 'include'
+          })
         }
       } catch (err) {
         console.error('Failed to fetch channels')
@@ -488,9 +493,8 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
     fetchChannels()
   }, [getToken, onAccessDenied])
 
-  // Flatten channels into list - only after streamConfig is ready
+  // Flatten channels into list
   useEffect(() => {
-    if (!streamConfig) return
     const list = Object.entries(channels).flatMap(([category, chs]) =>
       chs.map(ch => ({ ...ch, category }))
     )
@@ -498,16 +502,14 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
     if (list.length > 0 && !currentChannel) {
       playChannel(list[0].id, list[0].name, 0)
     }
-  }, [channels, streamConfig])
+  }, [channels])
 
   const getStreamUrl = useCallback((channelId) => {
-    if (!streamConfig) return null
-    return `${streamConfig.baseUrl}/${channelId}/chunks.m3u8`
-  }, [streamConfig])
+    return `${API_URL}/api/stream/${channelId}/chunks.m3u8`
+  }, [])
 
   const playChannel = useCallback((id, name, index) => {
     const url = getStreamUrl(id)
-    if (!url) return
     setError(null)
     setLoading(true)
     setCurrentIndex(index)
@@ -573,7 +575,10 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         enableWorker: true,
         lowLatencyMode: false,
         startLevel: -1,
-        debug: false
+        debug: false,
+        xhrSetup: (xhr) => {
+          xhr.withCredentials = true
+        }
       })
       hlsRef.current = hls
       
