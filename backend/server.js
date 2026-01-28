@@ -35,7 +35,7 @@ const COGNITO_CLIENT_ID = process.env.COGNITO_CLIENT_ID
 const COGNITO_CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET
 const COGNITO_DOMAIN = process.env.COGNITO_DOMAIN
 const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5173/callback'
-const STREAM_BASE_URL = process.env.STREAM_BASE_URL || 'http://103.10.30.130:8081/viatv'
+const STREAM_BASE_URL = process.env.STREAM_BASE_URL
 
 // Cognito client
 const cognitoClient = new CognitoIdentityProviderClient({ region: COGNITO_REGION })
@@ -252,6 +252,11 @@ app.post('/api/auth/signup', async (req, res) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(email)) {
     return res.status(400).json({ error: 'Invalid email format' })
+  }
+
+  // Check whitelist before allowing signup
+  if (!isWhitelisted(email)) {
+    return res.status(403).json({ error: 'Email not whitelisted. Contact admin for access.' })
   }
 
   try {
