@@ -314,11 +314,6 @@ app.post('/api/auth/signup', async (req, res) => {
     return res.status(400).json({ error: 'Invalid email format' })
   }
 
-  // Check whitelist before allowing signup
-  if (!isWhitelisted(email)) {
-    return res.status(403).json({ error: 'Email not whitelisted. Contact admin for access.' })
-  }
-
   try {
     await cognitoClient.send(new SignUpCommand({
       ClientId: COGNITO_CLIENT_ID,
