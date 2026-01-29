@@ -207,7 +207,7 @@ const streamAuthMiddleware = async (req, res, next) => {
   }
 }
 
-// CORS - explicit origins only
+// CORS - handled by nginx, but keep for direct access
 const ALLOWED_ORIGINS = [
   'https://tv.milan-pokhrel.com.np',
   'https://milan-pokhrel.com.np',
@@ -227,6 +227,11 @@ app.use(cors({
     // Reject all other origins
     callback(new Error('Not allowed by CORS'))
   },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Length']
+}))
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
