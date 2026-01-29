@@ -42,6 +42,23 @@ sudo netstat -tlnp | grep -E ':(3001|3002)'
 
 # Test health
 curl http://localhost:3001/health
+
+# Test CORS on manifest (should see Access-Control headers)
+curl -I http://localhost:3001/api/stream/viastarsports1hd/chunks.m3u8 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## If You Update nginx Config
+
+```bash
+# Test config first
+sudo nginx -t
+
+# Reload without downtime
+sudo systemctl reload nginx
+
+# Or restart if needed
+sudo systemctl restart nginx
 ```
 
 ## Your ALB
