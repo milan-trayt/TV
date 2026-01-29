@@ -183,13 +183,19 @@ const authMiddleware = async (req, res, next) => {
   }
 }
 
-// Stream auth middleware - checks cookie
+// Stream auth middleware - checks Authorization header or cookie
 const streamAuthMiddleware = async (req, res, next) => {
   try {
-    const token = req.cookies?.tv_stream_token
+    // Try Authorization header first, then cookie
+    let token = null
+    const authHeader = req.headers.authorization
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1]
+    } else {
+      token = req.cookies?.tv_stream_token
+    }
     
     if (!token) {
-      console.log('Stream auth failed: No cookie found')
       return res.status(401).json({ error: 'No token' })
     }
     
@@ -776,12 +782,15 @@ app.post('/api/admin/channels/rename-category', adminMiddleware, (req, res) => {
 app.post('/api/stream/auth', authMiddleware, (req, res) => {
   const token = req.headers.authorization.split(' ')[1]
   
-  res.cookie('tv_stream_token', token, { // Unique name to avoid conflicts
+  console.log('Setting cookie for origin:', req.headers.origin)
+  console.log('Host:', req.headers.host)
+  
+  res.cookie('tv_stream_token', token, {
     httpOnly: true,
     secure: true,
-    sameSite: 'lax',
-    domain: '.milan-pokhrel.com.np',
-    path: '/api/stream', // Only send with stream requests
+    sameSite: 'none', // Must be 'none' for cross-subdomain with secure
+    // Don't set domain - let browser use the request domain
+    path: '/api/stream',
     maxAge: 60 * 60 * 1000
   })
   

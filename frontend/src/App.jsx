@@ -611,8 +611,12 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         progressive: true,
         debug: false,
         xhrSetup: function(xhr, url) {
-          xhr.withCredentials = true
-          console.log('XHR setup for:', url, 'withCredentials:', xhr.withCredentials)
+          // Add Authorization header to all HLS requests
+          const token = getToken()
+          if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+          }
+          xhr.withCredentials = false // Don't need cookies anymore
         }
       })
       hlsRef.current = hls
