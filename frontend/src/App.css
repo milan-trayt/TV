@@ -346,36 +346,53 @@ body {
 
 .user-info {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 15px;
   padding-bottom: 15px;
   border-bottom: 1px solid #333;
 }
 
-.user-info span {
+.user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.user-details > span:first-child {
   color: #a1a1aa;
   font-size: 0.85rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 180px;
 }
 
-.logout-btn {
-  background: transparent;
-  border: 1px solid #ef4444;
-  color: #ef4444;
-  padding: 6px 12px;
+.user-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-btn, .logout-btn {
+  flex: 1;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
+  color: white;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 14px;
   transition: all 0.2s;
 }
 
+.admin-btn:hover {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.5);
+}
+
 .logout-btn:hover {
-  background: #ef4444;
-  color: #fff;
+  background: rgba(255, 68, 68, 0.2);
+  border-color: rgba(255, 68, 68, 0.5);
 }
 
 .controls {

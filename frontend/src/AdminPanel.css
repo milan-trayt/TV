@@ -1,0 +1,230 @@
+.admin-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.admin-panel {
+  background: #1a1a1a;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #333;
+}
+
+.admin-header > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-header h2 {
+  margin: 0;
+  color: #fff;
+}
+
+.super-admin-badge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.close-btn:hover {
+  color: #ff4444;
+}
+
+.admin-message {
+  margin: 10px 20px;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.admin-message.success {
+  background: #1a4d1a;
+  color: #4ade80;
+}
+
+.admin-message.error {
+  background: #4d1a1a;
+  color: #ff6b6b;
+}
+
+.admin-tabs {
+  display: flex;
+  border-bottom: 1px solid #333;
+}
+
+.admin-tabs button {
+  flex: 1;
+  padding: 15px;
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.admin-tabs button.active {
+  color: #fff;
+  background: #252525;
+  border-bottom: 2px solid #4ade80;
+}
+
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.admin-section {
+  margin-bottom: 30px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.admin-section h3 {
+  margin: 0 0 15px 0;
+  color: #fff;
+}
+
+.admin-section h4 {
+  margin: 15px 0 10px 0;
+  color: #4ade80;
+}
+
+.add-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.add-form input {
+  flex: 1;
+  padding: 10px;
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.add-form button {
+  padding: 10px 20px;
+  background: #4ade80;
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.add-form button:hover {
+  background: #22c55e;
+}
+
+.channel-form {
+  flex-wrap: wrap;
+}
+
+.channel-form input {
+  min-width: 150px;
+}
+
+.user-list, .channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-item, .channel-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #252525;
+  border-radius: 6px;
+}
+
+.user-item span, .channel-item strong {
+  color: #fff;
+}
+
+.channel-id {
+  display: block;
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.user-item button, .channel-item button {
+  padding: 6px 12px;
+  background: #333;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.user-item button:hover, .channel-item button:hover {
+  background: #444;
+}
+
+.section-header button {
+  padding: 8px 16px;
+  background: #333;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.section-header button:hover {
+  background: #444;
+}
+
+.channel-category {
+  margin-bottom: 20px;
+}

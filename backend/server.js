@@ -62,12 +62,31 @@ const loadUsers = () => {
 
 const saveUsers = (data) => {
   writeFileSync(USERS_FILE, JSON.stringify(data, null, 2))
+  // Invalidate cache on save
+  usersCache = data
+  usersCacheTime = Date.now()
 }
 
+// Cache users in memory
+let usersCache = loadUsers()
+let usersCacheTime = Date.now()
+
+const getCachedUsers = () => usersCache
+
 const isWhitelisted = (email) => {
-  const users = loadUsers()
+  const users = getCachedUsers()
   if (!users.whitelist.enabled) return true
   return users.whitelist.users.includes(email?.toLowerCase())
+}
+
+const isAdmin = (email) => {
+  const users = getCachedUsers()
+  return users.admins.includes(email?.toLowerCase())
+}
+
+const isSuperAdmin = (email) => {
+  const superAdmin = process.env.SUPER_ADMIN_EMAIL?.toLowerCase()
+  return superAdmin && email?.toLowerCase() === superAdmin
 }
 
 // JWKS client for token verification
@@ -85,22 +104,61 @@ const getKey = (header, callback) => {
   })
 }
 
-// Verify Cognito JWT
+// Verify Cognito JWT with aggressive caching
+const tokenCache = new Map()
+const TOKEN_CACHE_TTL = 3600000 // 1 hour - tokens are valid, cache aggressively
+
 const verifyToken = (token) => {
   return new Promise((resolve, reject) => {
     if (!COGNITO_USER_POOL_ID) {
-      // Dev mode - accept any token or create dev user
       return resolve({ sub: 'dev-user', email: 'dev@local' })
+    }
+    
+    // Check cache first
+    const cached = tokenCache.get(token)
+    if (cached && Date.now() - cached.time < TOKEN_CACHE_TTL) {
+      return resolve(cached.user)
     }
     
     jwt.verify(token, getKey, {
       issuer: `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}`,
       algorithms: ['RS256']
     }, (err, decoded) => {
-      if (err) reject(err)
-      else resolve(decoded)
+      if (err) {
+        tokenCache.delete(token)
+        reject(err)
+      } else {
+        tokenCache.set(token, { user: decoded, time: Date.now() })
+        // Limit cache size
+        if (tokenCache.size > 1000) {
+          const firstKey = tokenCache.keys().next().value
+          tokenCache.delete(firstKey)
+        }
+        resolve(decoded)
+      }
     })
   })
+}
+
+// Admin middleware
+const adminMiddleware = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' })
+    }
+    const token = authHeader.split(' ')[1]
+    const user = await verifyToken(token)
+    
+    if (!isAdmin(user.email)) {
+      return res.status(403).json({ error: 'Admin access required' })
+    }
+    
+    req.user = user
+    next()
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' })
+  }
 }
 
 // Auth middleware - verifies token + checks whitelist
@@ -166,8 +224,10 @@ app.use(cors({
 app.use(cookieParser())
 app.use(express.json())
 
-// Channel data
-const channels = {
+// ============ CHANNEL MANAGEMENT ============
+
+// In-memory channel cache - loaded once, updated via admin API
+let channelsCache = {
   Sports: [
     { id: 'viastarsports1hd', name: 'Star Sports 1 HD' },
     { id: 'viastarsports2hd', name: 'Star Sports 2 HD' }
@@ -517,9 +577,193 @@ app.get('/api/auth/logout-url', (req, res) => {
 // Get channels - all users use proxy
 app.get('/api/channels', authMiddleware, (req, res) => {
   res.json({
-    channels,
-    user: { email: req.user.email }
+    channels: channelsCache,
+    user: { email: req.user.email },
+    isAdmin: isAdmin(req.user.email),
+    isSuperAdmin: isSuperAdmin(req.user.email)
   })
+})
+
+// ============ ADMIN ENDPOINTS ============
+
+// Get all users (admin only)
+app.get('/api/admin/users', adminMiddleware, (req, res) => {
+  const users = getCachedUsers()
+  res.json(users)
+})
+
+// Add user to whitelist (admin only)
+app.post('/api/admin/users/add', adminMiddleware, (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email required' })
+  
+  const users = getCachedUsers()
+  const lowerEmail = email.toLowerCase()
+  
+  if (!users.whitelist.users.includes(lowerEmail)) {
+    users.whitelist.users.push(lowerEmail)
+    saveUsers(users)
+  }
+  
+  res.json({ success: true, users: users.whitelist.users })
+})
+
+// Remove user from whitelist (admin only)
+app.post('/api/admin/users/remove', adminMiddleware, (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email required' })
+  
+  const users = getCachedUsers()
+  const lowerEmail = email.toLowerCase()
+  
+  // Prevent removing yourself
+  if (lowerEmail === req.user.email.toLowerCase()) {
+    return res.status(400).json({ error: 'Cannot remove yourself' })
+  }
+  
+  users.whitelist.users = users.whitelist.users.filter(e => e !== lowerEmail)
+  saveUsers(users)
+  
+  res.json({ success: true, users: users.whitelist.users })
+})
+
+// Toggle whitelist enabled/disabled (admin only)
+app.post('/api/admin/users/toggle-whitelist', adminMiddleware, (req, res) => {
+  const users = getCachedUsers()
+  users.whitelist.enabled = !users.whitelist.enabled
+  saveUsers(users)
+  
+  res.json({ success: true, enabled: users.whitelist.enabled })
+})
+
+// Add admin (super admin only - requires SUPER_ADMIN_EMAIL env var)
+app.post('/api/admin/admins/add', adminMiddleware, (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email required' })
+  
+  // Only super admin can add admins
+  const superAdmin = process.env.SUPER_ADMIN_EMAIL?.toLowerCase()
+  if (!superAdmin || req.user.email.toLowerCase() !== superAdmin) {
+    return res.status(403).json({ error: 'Only super admin can add admins' })
+  }
+  
+  const users = getCachedUsers()
+  const lowerEmail = email.toLowerCase()
+  
+  // Auto-add to whitelist if not already there
+  if (!users.whitelist.users.includes(lowerEmail)) {
+    users.whitelist.users.push(lowerEmail)
+  }
+  
+  if (!users.admins.includes(lowerEmail)) {
+    users.admins.push(lowerEmail)
+    saveUsers(users)
+  }
+  
+  res.json({ success: true, admins: users.admins })
+})
+
+// Remove admin (super admin only)
+app.post('/api/admin/admins/remove', adminMiddleware, (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email required' })
+  
+  // Only super admin can remove admins
+  const superAdmin = process.env.SUPER_ADMIN_EMAIL?.toLowerCase()
+  if (!superAdmin || req.user.email.toLowerCase() !== superAdmin) {
+    return res.status(403).json({ error: 'Only super admin can remove admins' })
+  }
+  
+  const users = getCachedUsers()
+  const lowerEmail = email.toLowerCase()
+  
+  // Prevent removing super admin
+  if (lowerEmail === superAdmin) {
+    return res.status(400).json({ error: 'Cannot remove super admin' })
+  }
+  
+  // Prevent removing yourself
+  if (lowerEmail === req.user.email.toLowerCase()) {
+    return res.status(400).json({ error: 'Cannot remove yourself' })
+  }
+  
+  users.admins = users.admins.filter(e => e !== lowerEmail)
+  saveUsers(users)
+  
+  res.json({ success: true, admins: users.admins })
+})
+
+// Get channels (admin only)
+app.get('/api/admin/channels', adminMiddleware, (req, res) => {
+  res.json({ channels: channelsCache })
+})
+
+// Update channels (admin only)
+app.post('/api/admin/channels', adminMiddleware, (req, res) => {
+  const { channels } = req.body
+  if (!channels) return res.status(400).json({ error: 'Channels required' })
+  
+  // Validate structure
+  if (typeof channels !== 'object') {
+    return res.status(400).json({ error: 'Invalid channels format' })
+  }
+  
+  channelsCache = channels
+  res.json({ success: true, channels: channelsCache })
+})
+
+// Add channel to category (admin only)
+app.post('/api/admin/channels/add', adminMiddleware, (req, res) => {
+  const { category, id, name } = req.body
+  if (!category || !id || !name) {
+    return res.status(400).json({ error: 'Category, id, and name required' })
+  }
+  
+  if (!channelsCache[category]) {
+    channelsCache[category] = []
+  }
+  
+  // Check if channel already exists
+  const exists = channelsCache[category].some(ch => ch.id === id)
+  if (!exists) {
+    channelsCache[category].push({ id, name })
+  }
+  
+  res.json({ success: true, channels: channelsCache })
+})
+
+// Remove channel (admin only)
+app.post('/api/admin/channels/remove', adminMiddleware, (req, res) => {
+  const { category, id } = req.body
+  if (!category || !id) {
+    return res.status(400).json({ error: 'Category and id required' })
+  }
+  
+  if (channelsCache[category]) {
+    channelsCache[category] = channelsCache[category].filter(ch => ch.id !== id)
+    
+    // Remove empty categories
+    if (channelsCache[category].length === 0) {
+      delete channelsCache[category]
+    }
+  }
+  
+  res.json({ success: true, channels: channelsCache })
+})
+
+// Rename category (admin only)
+app.post('/api/admin/channels/rename-category', adminMiddleware, (req, res) => {
+  const { oldName, newName } = req.body
+  if (!oldName || !newName) {
+    return res.status(400).json({ error: 'Old and new category names required' })
+  }
+  
+  if (channelsCache[oldName]) {
+    channelsCache[newName] = channelsCache[oldName]
+    delete channelsCache[oldName]
+  }
+  
+  res.json({ success: true, channels: channelsCache })
 })
 
 // Set stream cookie (called before streaming)
@@ -544,7 +788,9 @@ app.get('/api/stream/:channelId/chunks.m3u8', streamAuthMiddleware, async (req, 
   const streamUrl = `${STREAM_BASE_URL}/${channelId}/chunks.m3u8`
 
   try {
-    const response = await fetch(streamUrl)
+    const response = await fetch(streamUrl, {
+      headers: { 'Connection': 'keep-alive' }
+    })
     if (!response.ok) return res.status(response.status).send('Stream unavailable')
 
     const manifest = await response.text()
@@ -560,7 +806,8 @@ app.get('/api/stream/:channelId/chunks.m3u8', streamAuthMiddleware, async (req, 
       .join('\n')
 
     res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
-    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.setHeader('Access-Control-Max-Age', '0')
     res.send(rewritten)
   } catch (err) {
     res.status(500).json({ error: 'Stream error' })
@@ -575,32 +822,46 @@ app.get('/api/stream/:channelId/*', streamAuthMiddleware, async (req, res) => {
   const segmentUrl = `${STREAM_BASE_URL}/${channelId}/${segment}${queryString ? '?' + queryString : ''}`
 
   try {
-    const response = await fetch(segmentUrl)
+    const response = await fetch(segmentUrl, {
+      headers: { 'Connection': 'keep-alive' }
+    })
     if (!response.ok) return res.status(response.status).send('Segment unavailable')
 
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'video/mp2t')
-    res.setHeader('Cache-Control', 'no-cache')
+    const contentType = response.headers.get('content-type') || 'video/mp2t'
+    const contentLength = response.headers.get('content-length')
 
-    const reader = response.body.getReader()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      res.write(value)
-    }
-    res.end()
+    // Set headers for low-latency streaming
+    res.setHeader('Content-Type', contentType)
+    if (contentLength) res.setHeader('Content-Length', contentLength)
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    res.setHeader('Accept-Ranges', 'bytes')
+    res.setHeader('Connection', 'keep-alive')
+    
+    // Disable buffering
+    res.setHeader('X-Accel-Buffering', 'no')
+
+    // Pipe directly - much faster than manual chunking
+    response.body.pipe(res)
   } catch (err) {
-    res.status(500).json({ error: 'Segment error' })
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Segment error' })
+    }
   }
 })
 
 // Health check
 app.get('/health', (req, res) => {
-  const users = loadUsers()
+  const users = getCachedUsers()
   res.json({ 
     status: 'ok', 
     cognito: !!COGNITO_USER_POOL_ID,
     whitelistEnabled: users.whitelist.enabled,
-    userCount: users.whitelist.users.length
+    userCount: users.whitelist.users.length,
+    adminCount: users.admins.length,
+    channelCount: Object.values(channelsCache).reduce((sum, chs) => sum + chs.length, 0),
+    categories: Object.keys(channelsCache).length
   })
 })
 
@@ -614,9 +875,27 @@ if (SERVE_FRONTEND) {
 }
 
 app.listen(PORT, () => {
-  const users = loadUsers()
+  const users = getCachedUsers()
+  const superAdmin = process.env.SUPER_ADMIN_EMAIL
+  
+  // Initialize super admin if set and not in admins list
+  if (superAdmin) {
+    const lowerSuperAdmin = superAdmin.toLowerCase()
+    if (!users.admins.includes(lowerSuperAdmin)) {
+      users.admins.push(lowerSuperAdmin)
+      if (!users.whitelist.users.includes(lowerSuperAdmin)) {
+        users.whitelist.users.push(lowerSuperAdmin)
+      }
+      saveUsers(users)
+      console.log(`✓ Super admin initialized: ${superAdmin}`)
+    }
+  }
+  
   console.log(`Server running on port ${PORT}`)
   console.log(`Cognito: ${COGNITO_USER_POOL_ID ? 'CONFIGURED' : 'DEV MODE'}`)
+  console.log(`Super Admin: ${superAdmin || 'NOT SET - Set SUPER_ADMIN_EMAIL env var'}`)
   console.log(`Whitelist: ${users.whitelist.enabled ? 'ENABLED' : 'DISABLED'} (${users.whitelist.users.length} users)`)
+  console.log(`Admins: ${users.admins.length}`)
+  console.log(`Channels: ${Object.values(channelsCache).reduce((sum, chs) => sum + chs.length, 0)} across ${Object.keys(channelsCache).length} categories`)
   if (SERVE_FRONTEND) console.log(`Serving frontend from /public`)
 })

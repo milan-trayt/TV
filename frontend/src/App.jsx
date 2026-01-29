@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Hls from 'hls.js'
+import AdminPanel from './AdminPanel'
 import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -456,6 +457,9 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
   const [showSidebar, setShowSidebar] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [userInfo, setUserInfo] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
   const sidebarTimeoutRef = useRef(null)
@@ -478,6 +482,8 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
           const data = await res.json()
           setChannels(data.channels)
           setUserInfo(data.user)
+          setIsAdmin(data.isAdmin)
+          setIsSuperAdmin(data.isSuperAdmin)
           
           // Set stream auth cookie
           await fetch(`${API_URL}/api/stream/auth`, {
@@ -573,8 +579,21 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
 
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false,
+        lowLatencyMode: true,
+        backBufferLength: 10,
+        maxBufferLength: 15,
+        maxMaxBufferLength: 20,
+        maxBufferSize: 30 * 1000 * 1000,
+        maxBufferHole: 0.5,
+        highBufferWatchdogPeriod: 1,
+        nudgeOffset: 0.1,
+        nudgeMaxRetry: 3,
+        maxFragLookUpTolerance: 0.2,
+        liveSyncDurationCount: 2,
+        liveMaxLatencyDurationCount: 5,
+        liveDurationInfinity: false,
         startLevel: -1,
+        startPosition: -1,
         debug: false,
         xhrSetup: (xhr) => {
           xhr.withCredentials = true
@@ -654,15 +673,19 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         toggleFullscreen()
       } else if (e.key === 'Escape') {
         setShowSidebar(false)
+        setShowAdminPanel(false)
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault()
         if (currentChannel) playChannel(currentChannel.id, currentChannel.name, currentIndex)
+      } else if ((e.key === 'a' || e.key === 'A') && isAdmin) {
+        e.preventDefault()
+        setShowAdminPanel(!showAdminPanel)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [channelList, currentIndex, currentChannel, playChannel, toggleMute, toggleFullscreen])
+  }, [channelList, currentIndex, currentChannel, playChannel, toggleMute, toggleFullscreen, isAdmin, showAdminPanel])
 
   const handleMouseMove = (e) => {
     if (e.clientX < 100) {
@@ -743,15 +766,37 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
             <div className="user-details">
               <span>{userInfo?.email || user?.email}</span>
             </div>
-            <button className="logout-btn" onClick={handleLogout}>Logout</button>
+            <div className="user-actions">
+              {isAdmin && (
+                <button className="admin-btn" onClick={() => setShowAdminPanel(true)}>
+                  Admin
+                </button>
+              )}
+              <button className="logout-btn" onClick={handleLogout}>Logout</button>
+            </div>
           </div>
           <div className="controls">
             <button onClick={toggleMute}>{isMuted ? '🔇' : '🔊'}</button>
             <button onClick={toggleFullscreen}>⛶</button>
           </div>
-          <div className="shortcuts">↑↓ Navigate • M Mute • F Fullscreen • R Reload</div>
+          <div className="shortcuts">
+            ↑↓ Navigate • M Mute • F Fullscreen • R Reload
+            {isAdmin && ' • A Admin'}
+          </div>
         </div>
       </div>
+
+      {showAdminPanel && (
+        <AdminPanel 
+          getToken={getToken}
+          isSuperAdmin={isSuperAdmin}
+          onClose={() => {
+            setShowAdminPanel(false)
+            // Reload channels after admin changes
+            window.location.reload()
+          }} 
+        />
+      )}
     </div>
   )
 }
