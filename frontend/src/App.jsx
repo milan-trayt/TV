@@ -579,21 +579,28 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
 
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
+        lowLatencyMode: false, // Disable low latency mode to reduce requests
         backBufferLength: 10,
-        maxBufferLength: 15,
-        maxMaxBufferLength: 20,
-        maxBufferSize: 30 * 1000 * 1000,
+        maxBufferLength: 30, // Keep 30 seconds buffered
+        maxMaxBufferLength: 60,
+        maxBufferSize: 60 * 1000 * 1000,
         maxBufferHole: 0.5,
-        highBufferWatchdogPeriod: 1,
+        highBufferWatchdogPeriod: 2,
         nudgeOffset: 0.1,
         nudgeMaxRetry: 3,
-        maxFragLookUpTolerance: 0.2,
-        liveSyncDurationCount: 2,
-        liveMaxLatencyDurationCount: 5,
+        maxFragLookUpTolerance: 0.25,
+        liveSyncDurationCount: 3, // Stay 3 segments behind live
+        liveMaxLatencyDurationCount: 10,
         liveDurationInfinity: false,
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 2,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingTimeOut: 10000,
+        levelLoadingMaxRetry: 2,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 2,
         startLevel: -1,
-        startPosition: -1,
+        abrEwmaDefaultEstimate: 500000, // Start with conservative bandwidth estimate
         debug: false,
         xhrSetup: (xhr) => {
           xhr.withCredentials = true

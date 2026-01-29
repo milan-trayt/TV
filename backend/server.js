@@ -825,9 +825,13 @@ app.get('/api/stream/:channelId/*', streamAuthMiddleware, async (req, res) => {
 
   try {
     const response = await fetch(segmentUrl, {
-      headers: { 'Connection': 'keep-alive' }
+      headers: { 'Connection': 'keep-alive' },
+      signal: AbortSignal.timeout(10000) // 10 second timeout
     })
-    if (!response.ok) return res.status(response.status).send('Segment unavailable')
+    
+    if (!response.ok) {
+      return res.status(response.status).send('Segment unavailable')
+    }
 
     const contentType = response.headers.get('content-type') || 'video/mp2t'
     const contentLength = response.headers.get('content-length')
@@ -840,32 +844,24 @@ app.get('/api/stream/:channelId/*', streamAuthMiddleware, async (req, res) => {
     res.setHeader('Expires', '0')
     res.setHeader('Accept-Ranges', 'bytes')
     res.setHeader('Connection', 'keep-alive')
-    
-    // Disable buffering
     res.setHeader('X-Accel-Buffering', 'no')
 
-    // Stream the response using Node.js streams
+    // Stream the response
     const reader = response.body.getReader()
-    const stream = new ReadableStream({
-      async start(controller) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          controller.enqueue(value)
-        }
-        controller.close()
+    
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!res.write(value)) {
+        // Backpressure - wait for drain
+        await new Promise(resolve => res.once('drain', resolve))
       }
-    })
-
-    // Convert to Node.js readable stream and pipe
-    for await (const chunk of stream) {
-      res.write(chunk)
     }
     res.end()
   } catch (err) {
-    console.error('Segment proxy error:', err)
+    console.error('Segment proxy error:', err.message)
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Segment error' })
+      res.status(500).send('Segment error')
     }
   }
 })
