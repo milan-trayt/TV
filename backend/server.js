@@ -179,7 +179,7 @@ const authMiddleware = async (req, res, next) => {
   }
 }
 
-// Stream auth middleware - checks Authorization header or cookie
+// Stream auth middleware - checks Authorization header or cookie, sets cookie if valid
 const streamAuthMiddleware = async (req, res, next) => {
   try {
     let token = null
@@ -199,6 +199,15 @@ const streamAuthMiddleware = async (req, res, next) => {
     if (!isWhitelisted(user.email)) {
       return res.status(403).json({ error: 'Access denied' })
     }
+    
+    // Set cookie for subsequent requests (1 hour, httpOnly, secure)
+    res.cookie('tv_stream_token', token, {
+      maxAge: 3600000, // 1 hour
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      domain: '.milan-pokhrel.com.np'
+    })
     
     req.user = user
     next()

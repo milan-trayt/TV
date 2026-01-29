@@ -583,15 +583,18 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         return
       }
       
-      // Create custom loader that adds Authorization header to ALL requests
+      // Create custom loader that adds Authorization header ONLY to manifest requests
       class CustomLoader extends Hls.DefaultConfig.loader {
         constructor(config) {
           super(config)
           const originalLoad = this.load.bind(this)
           this.load = function(context, config, callbacks) {
-            // Always add Authorization header
-            context.headers = context.headers || {}
-            context.headers['Authorization'] = `Bearer ${token}`
+            // Only add Authorization for manifest files (.m3u8)
+            // Segments (.ts) don't need auth - already verified via manifest
+            if (context.url.includes('.m3u8')) {
+              context.headers = context.headers || {}
+              context.headers['Authorization'] = `Bearer ${token}`
+            }
             return originalLoad(context, config, callbacks)
           }
         }
@@ -599,33 +602,36 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
       
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 10,
-        maxBufferLength: 10,
-        maxMaxBufferLength: 20,
-        maxBufferSize: 20 * 1000 * 1000,
-        maxBufferHole: 0.3,
-        highBufferWatchdogPeriod: 1,
-        nudgeOffset: 0.05,
-        nudgeMaxRetry: 5,
-        maxFragLookUpTolerance: 0.1,
-        liveSyncDurationCount: 2, // Stay close to live edge
-        liveMaxLatencyDurationCount: 4,
+        lowLatencyMode: false,
+        backBufferLength: 20,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 120 * 1000 * 1000,
+        maxBufferHole: 0.5,
+        highBufferWatchdogPeriod: 2,
+        nudgeOffset: 0.1,
+        nudgeMaxRetry: 3,
+        maxFragLookUpTolerance: 0.25,
+        liveSyncDurationCount: 5,
+        liveMaxLatencyDurationCount: 15,
         liveDurationInfinity: false,
-        manifestLoadingTimeOut: 5000,
-        manifestLoadingMaxRetry: 3,
-        manifestLoadingRetryDelay: 500,
-        levelLoadingTimeOut: 5000,
-        levelLoadingMaxRetry: 3,
-        fragLoadingTimeOut: 10000,
-        fragLoadingMaxRetry: 3,
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 2,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingTimeOut: 10000,
+        levelLoadingMaxRetry: 2,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 2,
         startLevel: -1,
-        abrEwmaDefaultEstimate: 1000000,
+        abrEwmaDefaultEstimate: 500000,
         startFragPrefetch: true,
         testBandwidth: false,
         progressive: true,
         debug: false,
-        loader: CustomLoader
+        loader: CustomLoader,
+        xhrSetup: function(xhr, url) {
+          xhr.withCredentials = true; // Send cookies
+        }
       })
       hlsRef.current = hls
       
