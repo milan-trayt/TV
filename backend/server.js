@@ -205,8 +205,10 @@ const streamAuthMiddleware = async (req, res, next) => {
 
 // CORS - explicit origins
 const ALLOWED_ORIGINS = [
-  'https://tv.pokhrelmilan.com.np',
-  'https://tvapi.pokhrelmilan.com.np'
+  'https://tv.milan-pokhrel.com.np',
+  'https://milan-pokhrel.com.np',
+  'https://tvapi.pokhrelmilan.com.np',
+  'https://tv.pokhrelmilan.com.np'
 ]
 
 app.use(cors({
