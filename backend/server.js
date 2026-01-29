@@ -844,9 +844,26 @@ app.get('/api/stream/:channelId/*', streamAuthMiddleware, async (req, res) => {
     // Disable buffering
     res.setHeader('X-Accel-Buffering', 'no')
 
-    // Pipe directly - much faster than manual chunking
-    response.body.pipe(res)
+    // Stream the response using Node.js streams
+    const reader = response.body.getReader()
+    const stream = new ReadableStream({
+      async start(controller) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          controller.enqueue(value)
+        }
+        controller.close()
+      }
+    })
+
+    // Convert to Node.js readable stream and pipe
+    for await (const chunk of stream) {
+      res.write(chunk)
+    }
+    res.end()
   } catch (err) {
+    console.error('Segment proxy error:', err)
     if (!res.headersSent) {
       res.status(500).json({ error: 'Segment error' })
     }
