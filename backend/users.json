@@ -1,6 +1,9 @@
 {
   "whitelist": {
     "enabled": true,
-    "users": ["mee.lawn111@gmail.com"]
-  }
+    "users": [
+      "mee.lawn111@gmail.com"
+    ]
+  },
+  "admins": []
 }

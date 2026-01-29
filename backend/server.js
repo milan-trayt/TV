@@ -878,6 +878,11 @@ app.listen(PORT, () => {
   const users = getCachedUsers()
   const superAdmin = process.env.SUPER_ADMIN_EMAIL
   
+  // Ensure admins array exists
+  if (!users.admins) {
+    users.admins = []
+  }
+  
   // Initialize super admin if set and not in admins list
   if (superAdmin) {
     const lowerSuperAdmin = superAdmin.toLowerCase()
