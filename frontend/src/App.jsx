@@ -582,7 +582,23 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         hlsRef.current = null
       }
 
-      const token = getToken() // Get token before creating HLS instance
+      const token = getToken()
+      
+      // Create custom loader that adds Authorization header
+      class CustomLoader extends Hls.DefaultConfig.loader {
+        constructor(config) {
+          super(config)
+          const load = this.load.bind(this)
+          this.load = function(context, config, callbacks) {
+            if (token) {
+              context.headers = context.headers || {}
+              context.headers['Authorization'] = `Bearer ${token}`
+            }
+            return load(context, config, callbacks)
+          }
+        }
+      }
+      
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
@@ -611,12 +627,7 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         testBandwidth: false,
         progressive: true,
         debug: false,
-        xhrSetup: function(xhr, url) {
-          // Add Authorization header to all HLS requests
-          if (token) {
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-          }
-        }
+        loader: CustomLoader
       })
       hlsRef.current = hls
       

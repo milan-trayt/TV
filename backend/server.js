@@ -186,7 +186,6 @@ const authMiddleware = async (req, res, next) => {
 // Stream auth middleware - checks Authorization header or cookie
 const streamAuthMiddleware = async (req, res, next) => {
   try {
-    // Try Authorization header first, then cookie
     let token = null
     const authHeader = req.headers.authorization
     if (authHeader?.startsWith('Bearer ')) {
@@ -208,7 +207,6 @@ const streamAuthMiddleware = async (req, res, next) => {
     req.user = user
     next()
   } catch (err) {
-    console.log('Stream auth failed:', err.message)
     res.status(401).json({ error: 'Invalid token' })
   }
 }
@@ -782,14 +780,10 @@ app.post('/api/admin/channels/rename-category', adminMiddleware, (req, res) => {
 app.post('/api/stream/auth', authMiddleware, (req, res) => {
   const token = req.headers.authorization.split(' ')[1]
   
-  console.log('Setting cookie for origin:', req.headers.origin)
-  console.log('Host:', req.headers.host)
-  
   res.cookie('tv_stream_token', token, {
     httpOnly: true,
     secure: true,
-    sameSite: 'none', // Must be 'none' for cross-subdomain with secure
-    // Don't set domain - let browser use the request domain
+    sameSite: 'none',
     path: '/api/stream',
     maxAge: 60 * 60 * 1000
   })
