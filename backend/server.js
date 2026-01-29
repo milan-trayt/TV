@@ -186,26 +186,23 @@ const authMiddleware = async (req, res, next) => {
 // Stream auth middleware - checks cookie
 const streamAuthMiddleware = async (req, res, next) => {
   try {
-    const token = req.cookies?.stream_token
+    const token = req.cookies?.tv_stream_token
     
     if (!token) {
       console.log('Stream auth failed: No cookie found')
-      console.log('All cookies:', req.cookies)
-      console.log('Cookie header:', req.headers.cookie)
       return res.status(401).json({ error: 'No token' })
     }
     
     const user = await verifyToken(token)
     
     if (!isWhitelisted(user.email)) {
-      console.log('Stream auth failed: Not whitelisted:', user.email)
       return res.status(403).json({ error: 'Access denied' })
     }
     
     req.user = user
     next()
   } catch (err) {
-    console.log('Stream auth failed: Invalid token:', err.message)
+    console.log('Stream auth failed:', err.message)
     res.status(401).json({ error: 'Invalid token' })
   }
 }
@@ -779,20 +776,15 @@ app.post('/api/admin/channels/rename-category', adminMiddleware, (req, res) => {
 app.post('/api/stream/auth', authMiddleware, (req, res) => {
   const token = req.headers.authorization.split(' ')[1]
   
-  console.log('Setting stream cookie for user:', req.user.email)
-  console.log('IS_PROD:', IS_PROD)
-  console.log('Secure:', IS_PROD)
-  console.log('SameSite:', IS_PROD ? 'none' : 'lax')
-  
-  res.cookie('stream_token', token, {
+  res.cookie('tv_stream_token', token, { // Unique name to avoid conflicts
     httpOnly: true,
-    secure: true, // Always use secure since you're on HTTPS
-    sameSite: 'none', // Required for cross-origin cookies
-    path: '/',
-    maxAge: 60 * 60 * 1000 // 1 hour
+    secure: true,
+    sameSite: 'lax',
+    domain: '.milan-pokhrel.com.np',
+    path: '/api/stream', // Only send with stream requests
+    maxAge: 60 * 60 * 1000
   })
   
-  console.log('Cookie set successfully')
   res.json({ success: true })
 })
 
