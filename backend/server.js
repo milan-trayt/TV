@@ -207,21 +207,25 @@ const streamAuthMiddleware = async (req, res, next) => {
   }
 }
 
-// CORS - explicit origins
+// CORS - explicit origins only
 const ALLOWED_ORIGINS = [
   'https://tv.milan-pokhrel.com.np',
   'https://milan-pokhrel.com.np',
-  'https://tvapi.pokhrelmilan.com.np',
-  'https://tv.pokhrelmilan.com.np'
+  'http://localhost:5173'  // For local development only
 ]
 
 app.use(cors({
   origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true)
+    
+    // Check if origin is in whitelist
     if (ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true)
     }
-    return callback(null, true)
+    
+    // Reject all other origins
+    callback(new Error('Not allowed by CORS'))
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

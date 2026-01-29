@@ -583,17 +583,16 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         return
       }
       
-      // Create custom loader that adds Authorization header
+      // Create custom loader that adds Authorization header to ALL requests
       class CustomLoader extends Hls.DefaultConfig.loader {
         constructor(config) {
           super(config)
-          const load = this.load.bind(this)
+          const originalLoad = this.load.bind(this)
           this.load = function(context, config, callbacks) {
-            if (token) {
-              context.headers = context.headers || {}
-              context.headers['Authorization'] = `Bearer ${token}`
-            }
-            return load(context, config, callbacks)
+            // Always add Authorization header
+            context.headers = context.headers || {}
+            context.headers['Authorization'] = `Bearer ${token}`
+            return originalLoad(context, config, callbacks)
           }
         }
       }
