@@ -452,6 +452,7 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
   const [channelList, setChannelList] = useState([])
   const [currentChannel, setCurrentChannel] = useState(null)
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [showSidebar, setShowSidebar] = useState(false)
@@ -460,9 +461,12 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [numberInput, setNumberInput] = useState('')
+  const [numberTimeout, setNumberTimeout] = useState(null)
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
   const sidebarTimeoutRef = useRef(null)
+  const selectedChannelRef = useRef(null)
 
   // Fetch channels from backend
   useEffect(() => {
@@ -507,6 +511,7 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
     setChannelList(list)
     if (list.length > 0 && !currentChannel) {
       playChannel(list[0].id, list[0].name, 0)
+      setSelectedIndex(0)
     }
   }, [channels])
 
@@ -579,9 +584,9 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
 
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false, // Disable low latency mode to reduce requests
+        lowLatencyMode: false,
         backBufferLength: 10,
-        maxBufferLength: 30, // Keep 30 seconds buffered
+        maxBufferLength: 30,
         maxMaxBufferLength: 60,
         maxBufferSize: 60 * 1000 * 1000,
         maxBufferHole: 0.5,
@@ -589,7 +594,7 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         nudgeOffset: 0.1,
         nudgeMaxRetry: 3,
         maxFragLookUpTolerance: 0.25,
-        liveSyncDurationCount: 3, // Stay 3 segments behind live
+        liveSyncDurationCount: 3,
         liveMaxLatencyDurationCount: 10,
         liveDurationInfinity: false,
         manifestLoadingTimeOut: 10000,
@@ -600,7 +605,10 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         fragLoadingTimeOut: 20000,
         fragLoadingMaxRetry: 2,
         startLevel: -1,
-        abrEwmaDefaultEstimate: 500000, // Start with conservative bandwidth estimate
+        abrEwmaDefaultEstimate: 500000,
+        startFragPrefetch: true,
+        testBandwidth: false,
+        progressive: true,
         debug: false,
         xhrSetup: (xhr) => {
           xhr.withCredentials = true
@@ -610,7 +618,15 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
       
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false)
+        // Start playback immediately
         video.play().catch(() => {})
+      })
+      
+      // Start playback as soon as first fragment is loaded
+      hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+        if (data.frag.sn === 0 || data.frag.sn === 1) {
+          video.play().catch(() => {})
+        }
       })
       
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -651,27 +667,83 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
     }
   }, [])
 
-  // Keyboard navigation
+  // Auto-scroll sidebar to selected channel
+  useEffect(() => {
+    if (showSidebar && selectedChannelRef.current) {
+      selectedChannelRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      })
+    }
+  }, [selectedIndex, showSidebar])
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Don't handle keys if admin panel is open
+      if (showAdminPanel) return
+      
       if (channelList.length === 0) return
+
+      // Number input for direct channel selection
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault()
+        const newInput = numberInput + e.key
+        setNumberInput(newInput)
+        
+        // Clear existing timeout
+        if (numberTimeout) clearTimeout(numberTimeout)
+        
+        // Set new timeout to switch channel after 2 seconds
+        const timeout = setTimeout(() => {
+          const channelNum = parseInt(newInput)
+          if (channelNum > 0 && channelNum <= channelList.length) {
+            const idx = channelNum - 1
+            const ch = channelList[idx]
+            playChannel(ch.id, ch.name, idx)
+            setSelectedIndex(idx)
+          }
+          setNumberInput('')
+        }, 2000)
+        
+        setNumberTimeout(timeout)
+        return
+      }
 
       if (e.key === 'ArrowUp') {
         e.preventDefault()
-        const newIndex = currentIndex > 0 ? currentIndex - 1 : channelList.length - 1
-        const ch = channelList[newIndex]
-        playChannel(ch.id, ch.name, newIndex)
         setShowSidebar(true)
+        const newIndex = selectedIndex > 0 ? selectedIndex - 1 : channelList.length - 1
+        setSelectedIndex(newIndex)
+        
+        // Auto-hide sidebar after 3 seconds of inactivity
         if (sidebarTimeoutRef.current) clearTimeout(sidebarTimeoutRef.current)
         sidebarTimeoutRef.current = setTimeout(() => setShowSidebar(false), 3000)
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
+        setShowSidebar(true)
+        const newIndex = selectedIndex < channelList.length - 1 ? selectedIndex + 1 : 0
+        setSelectedIndex(newIndex)
+        
+        if (sidebarTimeoutRef.current) clearTimeout(sidebarTimeoutRef.current)
+        sidebarTimeoutRef.current = setTimeout(() => setShowSidebar(false), 3000)
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        const newIndex = currentIndex > 0 ? currentIndex - 1 : channelList.length - 1
+        const ch = channelList[newIndex]
+        playChannel(ch.id, ch.name, newIndex)
+        setSelectedIndex(newIndex)
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
         const newIndex = currentIndex < channelList.length - 1 ? currentIndex + 1 : 0
         const ch = channelList[newIndex]
         playChannel(ch.id, ch.name, newIndex)
-        setShowSidebar(true)
-        if (sidebarTimeoutRef.current) clearTimeout(sidebarTimeoutRef.current)
-        sidebarTimeoutRef.current = setTimeout(() => setShowSidebar(false), 3000)
+        setSelectedIndex(newIndex)
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (showSidebar && selectedIndex !== currentIndex) {
+          const ch = channelList[selectedIndex]
+          playChannel(ch.id, ch.name, selectedIndex)
+        }
+        setShowSidebar(false)
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault()
         toggleMute()
@@ -684,15 +756,15 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault()
         if (currentChannel) playChannel(currentChannel.id, currentChannel.name, currentIndex)
-      } else if ((e.key === 'a' || e.key === 'A') && isAdmin) {
+      } else if ((e.key === 'a' || e.key === 'A') && isAdmin && !showAdminPanel) {
         e.preventDefault()
-        setShowAdminPanel(!showAdminPanel)
+        setShowAdminPanel(true)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [channelList, currentIndex, currentChannel, playChannel, toggleMute, toggleFullscreen, isAdmin, showAdminPanel])
+  }, [channelList, currentIndex, selectedIndex, currentChannel, playChannel, toggleMute, toggleFullscreen, isAdmin, showAdminPanel, numberInput, numberTimeout, showSidebar])
 
   const handleMouseMove = (e) => {
     if (e.clientX < 100) {
@@ -729,10 +801,13 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
 
       {currentChannel && (
         <div className={`channel-info ${loading ? 'loading' : ''}`}>
-          <div className="channel-number">{currentIndex + 1}</div>
+          <div className="channel-number">
+            {numberInput || currentIndex + 1}
+          </div>
           <div className="channel-name">{currentChannel.name}</div>
-          {loading && <div className="channel-status">Loading...</div>}
+          {loading && <div className="channel-status">Buffering...</div>}
           {error && <div className="channel-status error">{error}</div>}
+          {numberInput && <div className="channel-status">Enter channel number...</div>}
         </div>
       )}
 
@@ -754,9 +829,11 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
                 return (
                   <div
                     key={ch.id}
-                    className={`channel-item ${currentChannel?.id === ch.id ? 'active' : ''}`}
+                    ref={selectedIndex === idx ? selectedChannelRef : null}
+                    className={`channel-item ${currentChannel?.id === ch.id ? 'active' : ''} ${selectedIndex === idx ? 'selected' : ''}`}
                     onClick={() => {
                       playChannel(ch.id, ch.name, idx)
+                      setSelectedIndex(idx)
                       setShowSidebar(false)
                     }}
                   >
@@ -787,7 +864,7 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
             <button onClick={toggleFullscreen}>⛶</button>
           </div>
           <div className="shortcuts">
-            ↑↓ Navigate • M Mute • F Fullscreen • R Reload
+            ←→ Change • ↑↓ Navigate • Enter Select • 0-9 Go to • M Mute • F Fullscreen • R Reload
             {isAdmin && ' • A Admin'}
           </div>
         </div>
