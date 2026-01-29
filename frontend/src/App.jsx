@@ -610,8 +610,9 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         testBandwidth: false,
         progressive: true,
         debug: false,
-        xhrSetup: (xhr) => {
+        xhrSetup: function(xhr, url) {
           xhr.withCredentials = true
+          console.log('XHR setup for:', url, 'withCredentials:', xhr.withCredentials)
         }
       })
       hlsRef.current = hls
