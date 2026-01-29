@@ -582,6 +582,7 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         hlsRef.current = null
       }
 
+      const token = getToken() // Get token before creating HLS instance
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
@@ -612,11 +613,9 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         debug: false,
         xhrSetup: function(xhr, url) {
           // Add Authorization header to all HLS requests
-          const token = getToken()
           if (token) {
             xhr.setRequestHeader('Authorization', `Bearer ${token}`)
           }
-          xhr.withCredentials = false // Don't need cookies anymore
         }
       })
       hlsRef.current = hls
