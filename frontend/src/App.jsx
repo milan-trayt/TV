@@ -488,13 +488,6 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
           setUserInfo(data.user)
           setIsAdmin(data.isAdmin)
           setIsSuperAdmin(data.isSuperAdmin)
-          
-          // Set stream auth cookie
-          await fetch(`${API_URL}/api/stream/auth`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            credentials: 'include'
-          })
         }
       } catch (err) {
         console.error('Failed to fetch channels')
@@ -601,28 +594,28 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
       
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false,
+        lowLatencyMode: true,
         backBufferLength: 10,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
-        maxBufferSize: 60 * 1000 * 1000,
-        maxBufferHole: 0.5,
-        highBufferWatchdogPeriod: 2,
-        nudgeOffset: 0.1,
-        nudgeMaxRetry: 3,
-        maxFragLookUpTolerance: 0.25,
-        liveSyncDurationCount: 3,
-        liveMaxLatencyDurationCount: 10,
+        maxBufferLength: 10,
+        maxMaxBufferLength: 20,
+        maxBufferSize: 20 * 1000 * 1000,
+        maxBufferHole: 0.3,
+        highBufferWatchdogPeriod: 1,
+        nudgeOffset: 0.05,
+        nudgeMaxRetry: 5,
+        maxFragLookUpTolerance: 0.1,
+        liveSyncDurationCount: 2, // Stay close to live edge
+        liveMaxLatencyDurationCount: 4,
         liveDurationInfinity: false,
-        manifestLoadingTimeOut: 10000,
-        manifestLoadingMaxRetry: 2,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingTimeOut: 10000,
-        levelLoadingMaxRetry: 2,
-        fragLoadingTimeOut: 20000,
-        fragLoadingMaxRetry: 2,
+        manifestLoadingTimeOut: 5000,
+        manifestLoadingMaxRetry: 3,
+        manifestLoadingRetryDelay: 500,
+        levelLoadingTimeOut: 5000,
+        levelLoadingMaxRetry: 3,
+        fragLoadingTimeOut: 10000,
+        fragLoadingMaxRetry: 3,
         startLevel: -1,
-        abrEwmaDefaultEstimate: 500000,
+        abrEwmaDefaultEstimate: 1000000,
         startFragPrefetch: true,
         testBandwidth: false,
         progressive: true,

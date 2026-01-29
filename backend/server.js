@@ -25,7 +25,6 @@ const USERS_FILE = join(__dirname, 'users.json')
 
 const app = express()
 const PORT = process.env.PORT || 3001
-const IS_PROD = process.env.NODE_ENV === 'production'
 const SERVE_FRONTEND = process.env.SERVE_FRONTEND === 'true'
 
 // Configuration
@@ -35,7 +34,6 @@ const COGNITO_CLIENT_ID = process.env.COGNITO_CLIENT_ID
 const COGNITO_CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET
 const COGNITO_DOMAIN = process.env.COGNITO_DOMAIN
 const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5173/callback'
-const STREAM_BASE_URL = process.env.STREAM_BASE_URL
 
 // Cognito client
 const cognitoClient = new CognitoIdentityProviderClient({ region: COGNITO_REGION })
@@ -64,12 +62,10 @@ const saveUsers = (data) => {
   writeFileSync(USERS_FILE, JSON.stringify(data, null, 2))
   // Invalidate cache on save
   usersCache = data
-  usersCacheTime = Date.now()
 }
 
 // Cache users in memory
 let usersCache = loadUsers()
-let usersCacheTime = Date.now()
 
 const getCachedUsers = () => usersCache
 
@@ -776,103 +772,12 @@ app.post('/api/admin/channels/rename-category', adminMiddleware, (req, res) => {
   res.json({ success: true, channels: channelsCache })
 })
 
-// Set stream cookie (called before streaming)
-app.post('/api/stream/auth', authMiddleware, (req, res) => {
-  const token = req.headers.authorization.split(' ')[1]
-  
-  res.cookie('tv_stream_token', token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
-    path: '/api/stream',
-    maxAge: 60 * 60 * 1000
-  })
-  
-  res.json({ success: true })
-})
+// ============ STREAM AUTH ============
 
-// ============ STREAM PROXY ============
-
-// Proxy stream manifest
-app.get('/api/stream/:channelId/chunks.m3u8', streamAuthMiddleware, async (req, res) => {
-  const { channelId } = req.params
-  const streamUrl = `${STREAM_BASE_URL}/${channelId}/chunks.m3u8`
-
-  try {
-    const response = await fetch(streamUrl, {
-      headers: { 'Connection': 'keep-alive' }
-    })
-    if (!response.ok) return res.status(response.status).send('Stream unavailable')
-
-    const manifest = await response.text()
-    
-    // Rewrite manifest URLs to go through proxy
-    const rewritten = manifest
-      .replace(/URI="([^"]+)"/g, (_, uri) => `URI="/api/stream/${channelId}/${uri}"`)
-      .split('\n')
-      .map(line => {
-        if (line.startsWith('#') || line.trim() === '') return line
-        return `/api/stream/${channelId}/${line.trim()}`
-      })
-      .join('\n')
-
-    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-    res.setHeader('Access-Control-Max-Age', '0')
-    res.send(rewritten)
-  } catch (err) {
-    res.status(500).json({ error: 'Stream error' })
-  }
-})
-
-// Proxy segments
-app.get('/api/stream/:channelId/*', streamAuthMiddleware, async (req, res) => {
-  const { channelId } = req.params
-  const segment = req.params[0]
-  const queryString = new URLSearchParams(req.query).toString()
-  const segmentUrl = `${STREAM_BASE_URL}/${channelId}/${segment}${queryString ? '?' + queryString : ''}`
-
-  try {
-    const response = await fetch(segmentUrl, {
-      headers: { 'Connection': 'keep-alive' },
-      signal: AbortSignal.timeout(10000) // 10 second timeout
-    })
-    
-    if (!response.ok) {
-      return res.status(response.status).send('Segment unavailable')
-    }
-
-    const contentType = response.headers.get('content-type') || 'video/mp2t'
-    const contentLength = response.headers.get('content-length')
-
-    // Set headers for low-latency streaming
-    res.setHeader('Content-Type', contentType)
-    if (contentLength) res.setHeader('Content-Length', contentLength)
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-    res.setHeader('Pragma', 'no-cache')
-    res.setHeader('Expires', '0')
-    res.setHeader('Accept-Ranges', 'bytes')
-    res.setHeader('Connection', 'keep-alive')
-    res.setHeader('X-Accel-Buffering', 'no')
-
-    // Stream the response
-    const reader = response.body.getReader()
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (!res.write(value)) {
-        // Backpressure - wait for drain
-        await new Promise(resolve => res.once('drain', resolve))
-      }
-    }
-    res.end()
-  } catch (err) {
-    console.error('Segment proxy error:', err.message)
-    if (!res.headersSent) {
-      res.status(500).send('Segment error')
-    }
-  }
+// Lightweight auth verification for nginx auth_request
+app.get('/auth/verify-stream', streamAuthMiddleware, (req, res) => {
+  // If middleware passes, user is authenticated
+  res.status(200).send('OK')
 })
 
 // Health check
