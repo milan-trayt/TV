@@ -577,6 +577,12 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
 
       const token = getToken()
       
+      if (!token) {
+        setError('No authentication token')
+        setLoading(false)
+        return
+      }
+      
       // Create custom loader that adds Authorization header
       class CustomLoader extends Hls.DefaultConfig.loader {
         constructor(config) {
