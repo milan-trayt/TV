@@ -250,40 +250,72 @@ app.use(express.json())
 let channelsCache = {
   Sports: [
     { id: 'viastarsports1hd', name: 'Star Sports 1 HD' },
-    { id: 'viastarsports2hd', name: 'Star Sports 2 HD' }
+    { id: 'viastarsports2hd', name: 'Star Sports 2 HD' },
+    { id: 'viaten1hd', name: 'Ten 1 HD' },
+    { id: 'viaten2hd', name: 'Ten 2 HD' },
+    { id: 'viaten3hd', name: 'Ten 3 HD' },
+    { id: 'viaactionsportshd', name: 'Action Sports HD' },
+    { id: 'viaddsports', name: 'DD Sports' }
   ],
   Entertainment: [
     { id: 'viastargoldhd', name: 'Star Gold HD' },
+    { id: 'viastargoldselecthd', name: 'Star Gold Select HD' },
+    { id: 'viastarmovies', name: 'Star Movies' },
     { id: 'viacolors', name: 'Colors' },
-    { id: 'viasonyhd', name: 'Sony HD' },
     { id: 'viasonysabhd', name: 'Sony SAB HD' },
     { id: 'viasonypix', name: 'Sony PIX' },
+    { id: 'viasonybbc', name: 'Sony BBC' },
     { id: 'viazeecinema', name: 'Zee Cinema' },
+    { id: 'viazeecinemahd', name: 'Zee Cinema HD' },
     { id: 'viazeeanmol', name: 'Zee Anmol' },
-    { id: 'viazeecafehd', name: 'Zee Cafe HD' },
-    { id: 'viastarmovies', name: 'Star Movies' }
+    { id: 'viazeetvhd', name: 'Zee TV HD' },
+    { id: 'viaandtv', name: 'And TV' },
+    { id: 'viatvfilmy', name: 'TV Filmy' },
+    { id: 'viafoxlifehd', name: 'Fox Life HD' }
   ],
   News: [
     { id: 'viaaajtak', name: 'Aaj Tak' },
-    { id: 'viazeenews', name: 'Zee News' }
+    { id: 'viacnn', name: 'CNN' },
+    { id: 'viaaljazeera', name: 'Al Jazeera' },
+    { id: 'viadwtv', name: 'DW TV' },
+    { id: 'viatrtworldhd', name: 'TRT World HD' },
+    { id: 'viantvnews', name: 'NTV News' },
+    { id: 'viantvplus', name: 'NTV Plus' },
+    { id: 'viantvkohalpur', name: 'NTV Kohalpur' },
+    { id: 'viatvtoday', name: 'TV Today' },
+    { id: 'viabusinessplus', name: 'Business Plus' }
   ],
   Kids: [
     { id: 'viadiscoverykids', name: 'Discovery Kids' },
     { id: 'vianickjr', name: 'Nick Jr' },
     { id: 'viapogo', name: 'Pogo' },
-    { id: 'vianick', name: 'Nick' }
+    { id: 'vianick', name: 'Nick' },
+    { id: 'viadisneyjunior', name: 'Disney Junior' }
   ],
   Infotainment: [
     { id: 'viadiscoveryhd', name: 'Discovery HD' },
+    { id: 'viadiscoverychannel', name: 'Discovery Channel' },
     { id: 'vianatgeowildhd', name: 'Nat Geo Wild HD' },
     { id: 'viaanimalplanet', name: 'Animal Planet' },
-    { id: 'viatlc', name: 'TLC' }
+    { id: 'viatlc', name: 'TLC' },
+    { id: 'viatlcindia', name: 'TLC India' }
   ],
   Music: [
-    { id: 'viamtv', name: 'MTV' },
-    { id: 'viazing', name: 'Zing' },
-    { id: 'via9xm', name: '9XM' },
-    { id: 'via9xjalwa', name: '9X Jalwa' }
+    { id: 'viazing', name: 'Zing' }
+  ],
+  Nepali: [
+    { id: 'viaap1hd', name: 'AP1 HD' },
+    { id: 'vialifeoknepal', name: 'Life OK Nepal' },
+    { id: 'vianepalmandal', name: 'Nepal Mandal' },
+    { id: 'viaaranikotv', name: 'Araniko TV' },
+    { id: 'viamithilatv', name: 'Mithila TV' },
+    { id: 'viaparyawarantv', name: 'Paryawaran TV' },
+    { id: 'viachannelace', name: 'Channel Ace' }
+  ],
+  International: [
+    { id: 'viatv5monde', name: 'TV5 Monde' },
+    { id: 'viayohotv', name: 'Yoho TV' },
+    { id: 'viapeaceofmind', name: 'Peace of Mind' }
   ]
 }
 
