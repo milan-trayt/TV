@@ -251,70 +251,101 @@ let channelsCache = {
   Sports: [
     { id: 'viastarsports1hd', name: 'Star Sports 1 HD' },
     { id: 'viastarsports2hd', name: 'Star Sports 2 HD' },
-    { id: 'viaten1hd', name: 'Ten 1 HD' },
-    { id: 'viaten2hd', name: 'Ten 2 HD' },
-    { id: 'viaten3hd', name: 'Ten 3 HD' },
+    { id: 'viastarsports3hd', name: 'Star Sports 3 HD' },
+    { id: 'viastarsports1sd', name: 'Star Sports 1' },
+    { id: 'viastarsports2sd', name: 'Star Sports 2' },
+    { id: 'viastarsports3sd', name: 'Star Sports 3' },
+    { id: 'viaselecthd', name: 'Star Sports Select 1 HD' },
+    { id: 'viaselecthd2', name: 'Star Sports Select 2 HD' },
+    { id: 'viaselect1sd', name: 'Star Sports Select 1' },
+    { id: 'viachannelv', name: 'Star Sports Select 2' },
     { id: 'viaactionsportshd', name: 'Action Sports HD' },
+    { id: 'viaten1hd', name: 'Sony Ten 1 HD' },
+    { id: 'viaten2hd', name: 'Sony Ten 2 HD' },
+    { id: 'viaten3hd', name: 'Sony Ten 3 HD' },
     { id: 'viaddsports', name: 'DD Sports' }
   ],
-  Entertainment: [
+  Serials: [
+    { id: 'viazeetvhd', name: 'Zee TV HD' },
+    { id: 'viacolors', name: 'Colors' },
+    { id: 'viacolorsristey.stream', name: 'Colors Rishtey' },
+    { id: 'viaandtv', name: '&TV HD' },
+    { id: 'viazeeanmol', name: 'Zee Anmol' },
+    { id: 'viazing', name: 'Zing' }
+  ],
+  Movies: [
+    { id: 'viaStarPlusSd.stream', name: 'Star Plus' },
+    { id: 'viaStarGoldSD.stream', name: 'Star Gold' },
     { id: 'viastargoldhd', name: 'Star Gold HD' },
     { id: 'viastargoldselecthd', name: 'Star Gold Select HD' },
     { id: 'viastarmovies', name: 'Star Movies' },
-    { id: 'viacolors', name: 'Colors' },
-    { id: 'viasonysabhd', name: 'Sony SAB HD' },
-    { id: 'viasonypix', name: 'Sony PIX' },
-    { id: 'viasonybbc', name: 'Sony BBC' },
-    { id: 'viazeecinema', name: 'Zee Cinema' },
+    { id: 'viasonymaxhd', name: 'Sony MAX HD' },
+    { id: 'viasonypix', name: 'Sony Pix HD' },
+    { id: 'viaandpicture', name: '& Pictures HD' },
     { id: 'viazeecinemahd', name: 'Zee Cinema HD' },
-    { id: 'viazeeanmol', name: 'Zee Anmol' },
-    { id: 'viazeetvhd', name: 'Zee TV HD' },
-    { id: 'viaandtv', name: 'And TV' },
-    { id: 'viatvfilmy', name: 'TV Filmy' },
-    { id: 'viafoxlifehd', name: 'Fox Life HD' }
-  ],
-  News: [
-    { id: 'viaaajtak', name: 'Aaj Tak' },
-    { id: 'viacnn', name: 'CNN' },
-    { id: 'viaaljazeera', name: 'Al Jazeera' },
-    { id: 'viadwtv', name: 'DW TV' },
-    { id: 'viatrtworldhd', name: 'TRT World HD' },
-    { id: 'viantvnews', name: 'NTV News' },
-    { id: 'viantvplus', name: 'NTV Plus' },
-    { id: 'viantvkohalpur', name: 'NTV Kohalpur' },
-    { id: 'viatvtoday', name: 'TV Today' },
-    { id: 'viabusinessplus', name: 'Business Plus' }
-  ],
-  Kids: [
-    { id: 'viadiscoverykids', name: 'Discovery Kids' },
-    { id: 'vianickjr', name: 'Nick Jr' },
-    { id: 'viapogo', name: 'Pogo' },
-    { id: 'vianick', name: 'Nick' },
-    { id: 'viadisneyjunior', name: 'Disney Junior' }
-  ],
-  Infotainment: [
-    { id: 'viadiscoveryhd', name: 'Discovery HD' },
-    { id: 'viadiscoverychannel', name: 'Discovery Channel' },
-    { id: 'vianatgeowildhd', name: 'Nat Geo Wild HD' },
-    { id: 'viaanimalplanet', name: 'Animal Planet' },
-    { id: 'viatlc', name: 'TLC' },
-    { id: 'viatlcindia', name: 'TLC India' }
+    { id: 'viazeecinema', name: 'Zee Bollywood' },
+    { id: 'viazeeactionsd', name: 'Zee Action' },
+    { id: 'viastarutsav', name: 'Star Utsav Movies HD' },
+    { id: 'viahbohd', name: 'HBO' }
   ],
   Music: [
-    { id: 'viazing', name: 'Zing' }
+    { id: 'viamtv', name: 'MTV' },
+    { id: 'viaMtvHD.stream', name: 'MTV HD+' },
+    { id: 'viatlcindia', name: 'TLC' },
+    { id: 'viazoom', name: 'Zoom' },
+    { id: 'viamtuneshd', name: 'M Tunes' }
+  ],
+  Kids: [
+    { id: 'vianick', name: 'Nick' },
+    { id: 'vianickjr', name: 'Nick Jr' },
+    { id: 'viaDisneyChannel1500.stream', name: 'Disney' },
+    { id: 'viadisneyjunior', name: 'Disney Jr' },
+    { id: 'viacb', name: 'CBeebies' },
+    { id: 'viaSonicSd.stream', name: 'Sonic' },
+    { id: 'viapogo', name: 'Pogo' }
+  ],
+  Documentary: [
+    { id: 'vianatgeowildhd', name: 'Nat Geo Wild HD' },
+    { id: 'viaanimalplanet', name: 'Animal Planet' },
+    { id: 'viadiscoverychannel', name: 'Discovery Channel' },
+    { id: 'viadiscoveryhd', name: 'Discovery HD' },
+    { id: 'viadiscoverykids', name: 'Discovery Kids' },
+    { id: 'viafoxlifehd', name: 'Fox Life HD' },
+    { id: 'viasonybbc', name: 'Sony BBC Earth' }
   ],
   Nepali: [
+    { id: 'viatvfilmy', name: 'TV Filmy' },
+    { id: 'viantvnepal', name: 'NTV Nepal' },
+    { id: 'viantvnews', name: 'NTV News HD' },
+    { id: 'viantvplus', name: 'NTV Plus HD' },
+    { id: 'viantvkohalpur', name: 'NTV Kohalpur HD' },
+    { id: 'viaavenews', name: 'Avenews' },
+    { id: 'viakantipuriptv', name: 'Kantipur HD' },
+    { id: 'viaKntCineplexTv.stream', name: 'Kantipur Cineplex' },
     { id: 'viaap1hd', name: 'AP1 HD' },
-    { id: 'vialifeoknepal', name: 'Life OK Nepal' },
+    { id: 'viasagar', name: 'Sagarmatha TV' },
+    { id: 'viaabc', name: 'ABC News' },
+    { id: 'viaNews24', name: 'News 24' },
+    { id: 'viatvtoday', name: 'TV Today' },
+    { id: 'viayohotv', name: 'YOHO TV HD' },
+    { id: 'viabusinessplus', name: 'Business Plus' },
+    { id: 'vialifeoknepal', name: 'Life Ok Nepal' },
     { id: 'vianepalmandal', name: 'Nepal Mandal' },
+    { id: 'viamithilatv', name: 'Mithila TV HD' },
+    { id: 'viaparyawarantv', name: 'Paryawaran TV HD' },
+    { id: 'viachannelace', name: 'Channel Ace' },
     { id: 'viaaranikotv', name: 'Araniko TV' },
-    { id: 'viamithilatv', name: 'Mithila TV' },
-    { id: 'viaparyawarantv', name: 'Paryawaran TV' },
-    { id: 'viachannelace', name: 'Channel Ace' }
+    { id: 'viabuddhatv', name: 'Buddha TV' }
   ],
-  International: [
-    { id: 'viatv5monde', name: 'TV5 Monde' },
-    { id: 'viayohotv', name: 'Yoho TV' },
+  'International News': [
+    { id: 'viacnn', name: 'CNN' },
+    { id: 'viaaljazeera', name: 'Al Jazeera HD' },
+    { id: 'viatrtworldhd', name: 'TRT World HD' },
+    { id: 'viadwtv', name: 'DW-TV' },
+    { id: 'viatv5monde', name: 'TV 5 Monde' },
+    { id: 'viaaajtak', name: 'Aaj Tak' }
+  ],
+  Spiritual: [
     { id: 'viapeaceofmind', name: 'Peace of Mind' }
   ]
 }
