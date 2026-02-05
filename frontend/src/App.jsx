@@ -641,35 +641,36 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
       
       const hls = new Hls({
         enableWorker: true,
-        // Low-latency mode - reduces delay to ~3-5 seconds
+        // Low-latency mode enabled
         lowLatencyMode: true,
-        // Minimal back buffer for live
-        backBufferLength: 10,
-        // Smaller buffers = lower latency
-        maxBufferLength: 10,
-        maxMaxBufferLength: 20,
-        maxBufferSize: 30 * 1000 * 1000,
-        maxBufferHole: 0.3,
-        highBufferWatchdogPeriod: 1,
-        nudgeOffset: 0.05,
+        // Moderate buffers for stability
+        backBufferLength: 15,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferHole: 0.5,
+        highBufferWatchdogPeriod: 2,
+        nudgeOffset: 0.1,
         nudgeMaxRetry: 5,
-        maxFragLookUpTolerance: 0.1,
-        // Live sync - stay close to live edge
-        liveSyncDurationCount: 2,
-        liveMaxLatencyDurationCount: 5,
+        maxFragLookUpTolerance: 0.2,
+        // Live sync - reasonable distance from live edge
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 8,
         liveDurationInfinity: true,
-        liveBackBufferLength: 5,
-        // Faster manifest/segment loading
-        manifestLoadingTimeOut: 8000,
-        manifestLoadingMaxRetry: 3,
+        liveBackBufferLength: 10,
+        // Faster initial load
+        manifestLoadingTimeOut: 10000,
+        manifestLoadingMaxRetry: 4,
         manifestLoadingRetryDelay: 500,
-        levelLoadingTimeOut: 8000,
-        levelLoadingMaxRetry: 3,
-        fragLoadingTimeOut: 15000,
-        fragLoadingMaxRetry: 3,
-        // Start at highest quality for faster initial load
-        startLevel: -1,
-        abrEwmaDefaultEstimate: 1000000,
+        levelLoadingTimeOut: 10000,
+        levelLoadingMaxRetry: 4,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 6,
+        // Start at auto quality, prefer lower for faster start
+        startLevel: 0,
+        abrEwmaDefaultEstimate: 500000,
+        abrEwmaFastLive: 3,
+        abrEwmaSlowLive: 9,
         startFragPrefetch: true,
         testBandwidth: false,
         progressive: true,
@@ -694,9 +695,9 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
         }
       })
 
-      // Auto-sync to live edge if we fall too far behind
+      // Auto-sync to live edge if we fall too far behind (15+ seconds)
       hls.on(Hls.Events.FRAG_BUFFERED, () => {
-        if (hls.liveSyncPosition && video.currentTime < hls.liveSyncPosition - 10) {
+        if (hls.liveSyncPosition && video.currentTime < hls.liveSyncPosition - 15) {
           video.currentTime = hls.liveSyncPosition
         }
       })
