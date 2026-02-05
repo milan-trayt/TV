@@ -96,7 +96,46 @@ const useAuth = () => {
   
   const setDenied = (denied) => setAccessDenied(denied)
 
-  return { user, loading, authConfig, logout, getToken, fetchAuthConfig, accessDenied, setDenied }
+  // Auto-refresh token before expiry
+  const refreshToken = useCallback(async () => {
+    const refresh_token = localStorage.getItem('refresh_token')
+    if (!refresh_token) return false
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        localStorage.setItem('id_token', data.id_token)
+        localStorage.setItem('access_token', data.access_token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        setUser(data.user)
+        return true
+      }
+    } catch (err) {
+      console.error('Token refresh failed:', err)
+    }
+    return false
+  }, [])
+
+  // Set up auto-refresh every 45 minutes (tokens typically expire in 1 hour)
+  useEffect(() => {
+    if (!user) return
+    
+    const refreshInterval = setInterval(async () => {
+      const success = await refreshToken()
+      if (!success) {
+        logout() // Force logout if refresh fails
+      }
+    }, 45 * 60 * 1000) // 45 minutes
+
+    return () => clearInterval(refreshInterval)
+  }, [user, refreshToken, logout])
+
+  return { user, loading, authConfig, logout, getToken, fetchAuthConfig, accessDenied, setDenied, refreshToken }
 }
 
 function LoginPage({ authConfig, onRefresh }) {
@@ -602,35 +641,42 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
       
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false,
-        backBufferLength: 20,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        maxBufferSize: 120 * 1000 * 1000,
-        maxBufferHole: 0.5,
-        highBufferWatchdogPeriod: 2,
-        nudgeOffset: 0.1,
-        nudgeMaxRetry: 3,
-        maxFragLookUpTolerance: 0.25,
-        liveSyncDurationCount: 5,
-        liveMaxLatencyDurationCount: 15,
-        liveDurationInfinity: false,
-        manifestLoadingTimeOut: 10000,
-        manifestLoadingMaxRetry: 2,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingTimeOut: 10000,
-        levelLoadingMaxRetry: 2,
-        fragLoadingTimeOut: 20000,
-        fragLoadingMaxRetry: 2,
+        // Low-latency mode - reduces delay to ~3-5 seconds
+        lowLatencyMode: true,
+        // Minimal back buffer for live
+        backBufferLength: 10,
+        // Smaller buffers = lower latency
+        maxBufferLength: 10,
+        maxMaxBufferLength: 20,
+        maxBufferSize: 30 * 1000 * 1000,
+        maxBufferHole: 0.3,
+        highBufferWatchdogPeriod: 1,
+        nudgeOffset: 0.05,
+        nudgeMaxRetry: 5,
+        maxFragLookUpTolerance: 0.1,
+        // Live sync - stay close to live edge
+        liveSyncDurationCount: 2,
+        liveMaxLatencyDurationCount: 5,
+        liveDurationInfinity: true,
+        liveBackBufferLength: 5,
+        // Faster manifest/segment loading
+        manifestLoadingTimeOut: 8000,
+        manifestLoadingMaxRetry: 3,
+        manifestLoadingRetryDelay: 500,
+        levelLoadingTimeOut: 8000,
+        levelLoadingMaxRetry: 3,
+        fragLoadingTimeOut: 15000,
+        fragLoadingMaxRetry: 3,
+        // Start at highest quality for faster initial load
         startLevel: -1,
-        abrEwmaDefaultEstimate: 500000,
+        abrEwmaDefaultEstimate: 1000000,
         startFragPrefetch: true,
         testBandwidth: false,
         progressive: true,
         debug: false,
         loader: CustomLoader,
         xhrSetup: function(xhr, url) {
-          xhr.withCredentials = true; // Send cookies
+          xhr.withCredentials = true;
         }
       })
       hlsRef.current = hls
@@ -645,6 +691,13 @@ function TVPlayer({ user, logout, getToken, onAccessDenied }) {
       hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
         if (data.frag.sn === 0 || data.frag.sn === 1) {
           video.play().catch(() => {})
+        }
+      })
+
+      // Auto-sync to live edge if we fall too far behind
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        if (hls.liveSyncPosition && video.currentTime < hls.liveSyncPosition - 10) {
+          video.currentTime = hls.liveSyncPosition
         }
       })
       

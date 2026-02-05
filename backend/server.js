@@ -200,9 +200,10 @@ const streamAuthMiddleware = async (req, res, next) => {
       return res.status(403).json({ error: 'Access denied' })
     }
     
-    // Set cookie for subsequent requests (1 hour, httpOnly, secure)
+    // Set cookie for subsequent requests (24 hours, httpOnly, secure)
+    // Cookie is renewed on every request, so active viewers stay logged in
     res.cookie('tv_stream_token', token, {
-      maxAge: 3600000, // 1 hour
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
       httpOnly: true,
       secure: true,
       sameSite: 'none',
